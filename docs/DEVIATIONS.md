@@ -7,6 +7,6 @@ The app follows the standard frontend/backend/infra layout, but these standard c
 - Stripe: not needed yet because there are no paid features.
 - Brevo: not needed yet because the app does not send email.
 - Apify: not needed yet because the app uses direct EIA data pages instead of third-party scraping workflows.
-- Frontend install currently uses `npm install` instead of `npm ci` because this offline sandbox could not generate `package-lock.json`. After the first successful online install, commit the lockfile and switch the workflow back to `npm ci`.
+- Frontend lockfile is now committed, so standard `npm ci` workflow is restored.
 
 If the app later adds user accounts, saved scenarios, subscriptions, or lead capture, these items should be revisited.

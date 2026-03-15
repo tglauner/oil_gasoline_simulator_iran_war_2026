@@ -24,6 +24,13 @@
 - The EIA fetchers could not reach or parse the live pages.
 - The UI warning banner will show which source failed.
 - The simulator still works locally using deterministic fallback data.
+- Detailed backend diagnostics are written to `backend/logs/app.log`
+- The log file is truncated on each backend startup so it does not grow without bound
+- Each API response includes `X-Request-ID`, which can be matched against the backend log
+- Parse failures log which expected fields were found and a compact snippet of the EIA section that failed
+- For deep analysis, set `LOG_LEVEL=DEBUG` in `backend/.env` and restart the backend
+- If EIA history endpoints are slow, raise `SOURCE_FETCH_TIMEOUT_SECONDS` in `backend/.env` above the default `40`
+- Keep `EXPOSE_INTERNAL_ERROR_DETAILS=false` unless you explicitly want 500 response bodies to include internal exception text during local debugging
 
 ### Build or install fails
 

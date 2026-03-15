@@ -9,4 +9,4 @@ python3 -m venv .venv
 pip install -r requirements.txt
 
 cd "${ROOT_DIR}/frontend"
-npm install
+npm ci

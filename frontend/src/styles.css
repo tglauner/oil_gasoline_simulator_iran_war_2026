@@ -191,6 +191,46 @@ body::before {
   line-height: 1.45;
 }
 
+.warning-title {
+  margin: 0 0 10px;
+  font-weight: 700;
+}
+
+.warning-list,
+.debug-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.warning-list li,
+.debug-list li {
+  margin-bottom: 8px;
+}
+
+.debug-details {
+  margin-top: 12px;
+}
+
+.debug-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.debug-list {
+  margin-top: 10px;
+}
+
+.debug-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.debug-note {
+  margin: 12px 0 0;
+  color: rgba(255, 244, 228, 0.92);
+  word-break: break-word;
+}
+
 main {
   display: grid;
   gap: 22px;
@@ -495,6 +535,12 @@ th {
   width: 14px;
   height: 14px;
   border-radius: 999px;
+}
+
+.marker-swatch {
+  background:
+    linear-gradient(90deg, transparent 0 40%, rgba(157, 77, 47, 0.9) 40% 60%, transparent 60% 100%);
+  border: 1px solid rgba(157, 77, 47, 0.35);
 }
 
 @media (max-width: 1100px) {

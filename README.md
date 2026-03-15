@@ -37,7 +37,7 @@ uvicorn app.main:app --reload
 
 ```bash
 cd /Users/tglauner/Library/CloudStorage/Dropbox/2\ -\ TG\ Investments\ and\ Research/Projects/oil_gasoline_simulator_iran_war_2026/frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -66,6 +66,19 @@ pytest
 
 - `frontend/.env.example`
 - `backend/.env.example`
+- `IRAN_WAR_START_DATE` defaults to `2026-02-28` and controls the vertical event marker on the 104-week oil and gasoline charts
+
+## Debug logging
+
+- Backend runtime logs go to `backend/logs/app.log`
+- The backend truncates that log file on each startup when `TRUNCATE_LOGS_ON_STARTUP=true`
+- Request logs include request IDs, response status, client host, and duration
+- EIA source diagnostics include fetch timing, source URL, error class, and fallback reason
+- Parse failures log field-level booleans and a compact section snippet so EIA markup changes can be diagnosed quickly
+- The frontend exposes source diagnostics in the warning panel when fallback or hybrid mode is active
+- Set `LOG_LEVEL=DEBUG` in `backend/.env` when you want header-level fetch diagnostics in the terminal and log file
+- `SOURCE_FETCH_TIMEOUT_SECONDS` defaults to `40` to tolerate slower EIA responses; raise it in `backend/.env` if their history pages are especially slow
+- Leave `EXPOSE_INTERNAL_ERROR_DETAILS=false` in production so 500 responses stay sanitized while full details remain in logs
 
 ## Data sources
 
@@ -78,5 +91,5 @@ pytest
 
 - The backend falls back to deterministic synthetic data if live EIA fetches fail.
 - The app is read-only for now, so there is no DB, auth, or billing integration yet.
-- Frontend uses `npm install` for now because this sandbox could not generate `package-lock.json`; switch to `npm ci` after the first online install creates the lockfile.
+- Frontend lockfile is committed, so local setup and CI should use `npm ci`.
 - See `docs/DEVIATIONS.md` for the temporary differences from the full app architecture standard.

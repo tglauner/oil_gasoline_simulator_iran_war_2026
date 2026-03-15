@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -16,6 +16,12 @@ function formatMoney(value, decimals = 2) {
 
 function formatPercent(value, decimals = 1) {
   return `${(value * 100).toFixed(decimals)}%`;
+}
+
+
+function formatSignedPercent(value, decimals = 1) {
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}${Math.abs(value * 100).toFixed(decimals)}%`;
 }
 
 
@@ -62,7 +68,7 @@ async function fetchJson(path, options) {
 }
 
 
-function LineChart({ series, height = 250 }) {
+function LineChart({ series, height = 250, marker = null }) {
   if (!series.length || !series[0].points.length) {
     return <div className="chart-empty">No chart data available.</div>;
   }
@@ -80,6 +86,14 @@ function LineChart({ series, height = 250 }) {
   const count = Math.max(...series.map((item) => item.points.length));
   const firstDate = series[0].points[0].x;
   const lastDate = series[0].points[series[0].points.length - 1].x;
+  const firstDateMs = new Date(`${firstDate}T00:00:00Z`).getTime();
+  const lastDateMs = new Date(`${lastDate}T00:00:00Z`).getTime();
+  const markerDateMs = marker ? new Date(`${marker.date}T00:00:00Z`).getTime() : null;
+  const markerInRange = markerDateMs != null && markerDateMs >= firstDateMs && markerDateMs <= lastDateMs;
+  const markerRatio = markerInRange && lastDateMs > firstDateMs ? (markerDateMs - firstDateMs) / (lastDateMs - firstDateMs) : null;
+  const markerX = markerRatio != null ? padding.left + innerWidth * markerRatio : null;
+  const markerTextAnchor = markerRatio != null && markerRatio > 0.76 ? "end" : "start";
+  const markerLabelX = markerX == null ? null : markerTextAnchor === "start" ? markerX + 6 : markerX - 6;
 
   const grid = Array.from({ length: 5 }, (_, index) => {
     const y = padding.top + (innerHeight / 4) * index;
@@ -106,6 +120,12 @@ function LineChart({ series, height = 250 }) {
               {item.label}
             </span>
           ))}
+          {markerInRange ? (
+            <span className="legend-item">
+              <span className="legend-swatch marker-swatch" />
+              {marker.label}
+            </span>
+          ) : null}
         </div>
         <div>
           {formatDate(firstDate)} to {formatDate(lastDate)}
@@ -117,6 +137,29 @@ function LineChart({ series, height = 250 }) {
       </div>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Line chart">
         {grid}
+        {markerInRange ? (
+          <g>
+            <line
+              x1={markerX}
+              y1={padding.top}
+              x2={markerX}
+              y2={height - padding.bottom}
+              stroke="rgba(157, 77, 47, 0.9)"
+              strokeWidth="2"
+              strokeDasharray="6 6"
+            />
+            <text
+              x={markerLabelX}
+              y={padding.top + 12}
+              textAnchor={markerTextAnchor}
+              fill="#9d4d2f"
+              fontSize="11"
+              fontWeight="700"
+            >
+              {marker.label}
+            </text>
+          </g>
+        ) : null}
         {series.map((line) => {
           const points = line.points
             .map((point, index) => {
@@ -176,6 +219,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState(null);
   const [simulation, setSimulation] = useState(null);
   const [status, setStatus] = useState("Loading market data and model diagnostics.");
+  const initialLoadStarted = useRef(false);
   const [calculatorInputs, setCalculatorInputs] = useState({
     miles: "300",
     mpg: "26",
@@ -188,6 +232,10 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (initialLoadStarted.current) {
+      return;
+    }
+    initialLoadStarted.current = true;
     void loadDashboard(false);
   }, []);
 
@@ -195,8 +243,9 @@ export default function App() {
     setStatus("Loading market data and model diagnostics.");
     try {
       const payload = await fetchJson(forceRefresh ? "/api/refresh" : "/api/dashboard");
+      const defaultTargetWti = payload.current.daily_wti.value * 1.25;
       const nextScenario = {
-        targetWti: payload.current.daily_wti.value.toFixed(1),
+        targetWti: defaultTargetWti.toFixed(1),
         horizonWeeks: "8",
         transitionWeeks: "2",
       };
@@ -264,6 +313,17 @@ export default function App() {
   const fillUpCost = tankGallons * gasPrice;
   const crudeCostPerGallon = wtiPrice / 42.0;
   const crudeShare = gasPrice > 0 ? crudeCostPerGallon / gasPrice : 0;
+  const targetWtiValue = Number(scenarioInputs.targetWti || 0);
+  const oilTargetDelta = wtiPrice > 0 ? targetWtiValue / wtiPrice - 1 : 0;
+  const modeledGasDelta = simulation?.current_basis?.weekly_gas
+    ? simulation.summary.final_price / simulation.current_basis.weekly_gas - 1
+    : 0;
+  const eventMarker = dashboard?.historical_event
+    ? {
+        date: dashboard.historical_event.date,
+        label: `${dashboard.historical_event.label} ${formatDate(dashboard.historical_event.date)}`,
+      }
+    : null;
 
   return (
     <div className="page-shell">
@@ -284,12 +344,40 @@ export default function App() {
             </button>
           </div>
           <p className="status-text">{status}</p>
-          {dashboard?.errors?.length ? <div className="warning-box">{dashboard.errors.join(" ")}</div> : null}
+          {dashboard?.errors?.length ? (
+            <div className="warning-box">
+              <p className="warning-title">Live source diagnostics</p>
+              <ul className="warning-list">
+                {dashboard.errors.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              {dashboard.diagnostics?.sources?.length ? (
+                <details className="debug-details">
+                  <summary>Open source diagnostics</summary>
+                  <ul className="debug-list">
+                    {dashboard.diagnostics.sources.map((item) => (
+                      <li key={item.name}>
+                        <strong>{item.name}</strong>
+                        <span>{item.ok ? "live" : "fallback"}</span>
+                        <span>{item.error_type || "ok"}</span>
+                        <span>{item.elapsed_ms != null ? `${item.elapsed_ms} ms` : "n/a"}</span>
+                        <span>{item.error || item.url}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {dashboard.diagnostics.log_file ? (
+                    <p className="debug-note">Backend log file: {dashboard.diagnostics.log_file}</p>
+                  ) : null}
+                </details>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </header>
 
       <main>
-        <section className="panel">
+	        <section className="panel">
           <div className="section-head">
             <div>
               <p className="eyebrow">Current Snapshot</p>
@@ -327,12 +415,13 @@ export default function App() {
                 <h3>WTI, last 104 weeks</h3>
                 <p>Weekly average aligned to Monday gas release</p>
               </div>
-              <div className="chart-frame">
-                {dashboard ? (
-                  <LineChart
-                    series={[
-                      {
-                        label: "WTI weekly",
+	              <div className="chart-frame">
+	                {dashboard ? (
+	                  <LineChart
+	                    marker={eventMarker}
+	                    series={[
+	                      {
+	                        label: "WTI weekly",
                         color: "#9d4d2f",
                         fill: "rgba(157, 77, 47, 0.10)",
                         points: dashboard.history.weekly_pairs.map((item) => ({ x: item.date, y: item.crude })),
@@ -347,12 +436,13 @@ export default function App() {
                 <h3>U.S. gasoline, last 104 weeks</h3>
                 <p>EIA regular all-formulations retail price</p>
               </div>
-              <div className="chart-frame">
-                {dashboard ? (
-                  <LineChart
-                    series={[
-                      {
-                        label: "Gasoline weekly",
+	              <div className="chart-frame">
+	                {dashboard ? (
+	                  <LineChart
+	                    marker={eventMarker}
+	                    series={[
+	                      {
+	                        label: "Gasoline weekly",
                         color: "#1d6f72",
                         fill: "rgba(29, 111, 114, 0.12)",
                         points: dashboard.history.weekly_pairs.map((item) => ({ x: item.date, y: item.gas })),
@@ -365,85 +455,9 @@ export default function App() {
           </div>
         </section>
 
-        <section className="panel split-panel">
-          <article className="calculator-card">
-            <div className="section-head compact">
-              <div>
-                <p className="eyebrow">Calculator</p>
-                <h2>Trip and fill-up cost</h2>
-              </div>
-            </div>
-            <p className="panel-text">
-              Uses the current AAA U.S. regular gasoline price for the pump estimate and the current WTI close for the
-              crude-only input cost.
-            </p>
-            <form className="form-grid">
-              <label>
-                Miles to drive
-                <input name="miles" type="number" min="1" step="1" value={calculatorInputs.miles} onChange={handleCalculatorChange} />
-              </label>
-              <label>
-                Vehicle mpg
-                <input name="mpg" type="number" min="1" step="0.1" value={calculatorInputs.mpg} onChange={handleCalculatorChange} />
-              </label>
-              <label>
-                Tank size (gallons)
-                <input
-                  name="tankGallons"
-                  type="number"
-                  min="1"
-                  step="0.1"
-                  value={calculatorInputs.tankGallons}
-                  onChange={handleCalculatorChange}
-                />
-              </label>
-            </form>
-            <div className="result-grid">
-              <ResultCard label="Gallons for trip" value={gallonsForTrip ? gallonsForTrip.toFixed(2) : "--"} />
-              <ResultCard label="Trip pump cost" value={tripCost ? formatMoney(tripCost, 2) : "--"} />
-              <ResultCard label="Full tank cost" value={fillUpCost ? formatMoney(fillUpCost, 2) : "--"} />
-              <ResultCard label="Crude share per gallon" value={dashboard ? formatPercent(crudeShare, 1) : "--"} />
-            </div>
-          </article>
-
-          <article className="calculator-card emphasis-card">
-            <div className="section-head compact">
-              <div>
-                <p className="eyebrow">Reference Mix</p>
-                <h2>Pump-price anatomy</h2>
-              </div>
-            </div>
-            <p className="panel-text">
-              EIA’s current weekly page reports that January 2026 gasoline prices were split roughly into crude oil,
-              refining, distribution and marketing, and taxes.
-            </p>
-            <div className="stack-list">
-              <div className="stack-item">
-                <span>Crude oil</span>
-                <strong>{dashboard ? formatPercent(dashboard.calculator.eia_reference_crude_share, 1) : "--"}</strong>
-              </div>
-              <div className="stack-item">
-                <span>Refining</span>
-                <strong>17.5%</strong>
-              </div>
-              <div className="stack-item">
-                <span>Distribution + marketing</span>
-                <strong>16.6%</strong>
-              </div>
-              <div className="stack-item">
-                <span>Taxes</span>
-                <strong>16.4%</strong>
-              </div>
-            </div>
-            <p className="metric-note">
-              {dashboard ? `Current WTI implies ${formatMoney(dashboard.calculator.daily_wti_per_gallon, 3)} per gallon of crude input before refining, distribution, and taxes.` : ""}
-            </p>
-          </article>
-        </section>
-
-        <section className="panel">
-          <div className="section-head">
-            <div>
+	        <section className="panel">
+	          <div className="section-head">
+	            <div>
               <p className="eyebrow">Simulation</p>
               <h2>Run a crude-price scenario</h2>
             </div>
@@ -451,9 +465,9 @@ export default function App() {
           </div>
 
           <div className="simulation-grid">
-            <form className="simulation-form" onSubmit={handleSimulationSubmit}>
-              <label>
-                Target WTI ($/barrel)
+	            <form className="simulation-form" onSubmit={handleSimulationSubmit}>
+	              <label>
+	                Target WTI ($/barrel)
                 <input name="targetWti" type="number" min="1" step="0.1" value={scenarioInputs.targetWti} onChange={handleScenarioChange} />
               </label>
               <label>
@@ -477,28 +491,44 @@ export default function App() {
               </button>
             </form>
 
-            <div className="simulation-summary">
-              <div className="summary-grid">
-                <ResultCard
-                  label="Peak gasoline move"
-                  value={simulation ? `${signedCents(simulation.summary.peak_delta_cents)} in week ${simulation.summary.peak_week}` : "--"}
-                />
-                <ResultCard
-                  label="Final modeled price"
-                  value={simulation ? formatMoney(simulation.summary.final_price, 3) : "--"}
-                />
-                <ResultCard
-                  label="Model basis"
-                  value={
-                    simulation
-                      ? `${formatMoney(simulation.current_basis.weekly_wti, 2)} WTI / ${formatMoney(simulation.current_basis.weekly_gas, 3)} gas`
-                      : "--"
-                  }
-                />
-                <ResultCard
-                  label="Validation MAE"
-                  value={
-                    simulation?.model.validation_mae_cents != null
+	            <div className="simulation-summary">
+	              <div className="summary-grid">
+	                <ResultCard
+	                  label="Spot oil"
+	                  value={dashboard ? formatMoney(dashboard.current.daily_wti.value, 2) : "--"}
+	                />
+	                <ResultCard
+	                  label="Target oil"
+	                  value={
+	                    dashboard
+	                      ? `${formatMoney(targetWtiValue, 2)} ${formatSignedPercent(oilTargetDelta, 1)}`
+	                      : "--"
+	                  }
+	                />
+	                <ResultCard
+	                  label="Current gas"
+	                  value={
+	                    simulation
+	                      ? formatMoney(simulation.current_basis.weekly_gas, 3)
+	                      : "--"
+	                  }
+	                />
+	                <ResultCard
+	                  label="Scenario gas"
+	                  value={
+	                    simulation
+	                      ? `${formatMoney(simulation.summary.final_price, 3)} ${formatSignedPercent(modeledGasDelta, 1)}`
+	                      : "--"
+	                  }
+	                />
+	                <ResultCard
+	                  label="Peak gasoline move"
+	                  value={simulation ? `${signedCents(simulation.summary.peak_delta_cents)} in week ${simulation.summary.peak_week}` : "--"}
+	                />
+	                <ResultCard
+	                  label="Validation MAE"
+	                  value={
+	                    simulation?.model.validation_mae_cents != null
                       ? `${simulation.model.validation_mae_cents.toFixed(1)}c`
                       : dashboard?.model.validation_mae_cents != null
                         ? `${dashboard.model.validation_mae_cents.toFixed(1)}c`
@@ -554,8 +584,84 @@ export default function App() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </section>
+	          </div>
+	        </section>
+
+	        <section className="panel split-panel">
+	          <article className="calculator-card">
+	            <div className="section-head compact">
+	              <div>
+	                <p className="eyebrow">Calculator</p>
+	                <h2>Trip and fill-up cost</h2>
+	              </div>
+	            </div>
+	            <p className="panel-text">
+	              Uses the current AAA U.S. regular gasoline price for the pump estimate and the current WTI close for the
+	              crude-only input cost.
+	            </p>
+	            <form className="form-grid">
+	              <label>
+	                Miles to drive
+	                <input name="miles" type="number" min="1" step="1" value={calculatorInputs.miles} onChange={handleCalculatorChange} />
+	              </label>
+	              <label>
+	                Vehicle mpg
+	                <input name="mpg" type="number" min="1" step="0.1" value={calculatorInputs.mpg} onChange={handleCalculatorChange} />
+	              </label>
+	              <label>
+	                Tank size (gallons)
+	                <input
+	                  name="tankGallons"
+	                  type="number"
+	                  min="1"
+	                  step="0.1"
+	                  value={calculatorInputs.tankGallons}
+	                  onChange={handleCalculatorChange}
+	                />
+	              </label>
+	            </form>
+	            <div className="result-grid">
+	              <ResultCard label="Gallons for trip" value={gallonsForTrip ? gallonsForTrip.toFixed(2) : "--"} />
+	              <ResultCard label="Trip pump cost" value={tripCost ? formatMoney(tripCost, 2) : "--"} />
+	              <ResultCard label="Full tank cost" value={fillUpCost ? formatMoney(fillUpCost, 2) : "--"} />
+	              <ResultCard label="Crude share per gallon" value={dashboard ? formatPercent(crudeShare, 1) : "--"} />
+	            </div>
+	          </article>
+
+	          <article className="calculator-card emphasis-card">
+	            <div className="section-head compact">
+	              <div>
+	                <p className="eyebrow">Reference Mix</p>
+	                <h2>Pump-price anatomy</h2>
+	              </div>
+	            </div>
+	            <p className="panel-text">
+	              EIA's current weekly page reports that January 2026 gasoline prices were split roughly into crude oil,
+	              refining, distribution and marketing, and taxes.
+	            </p>
+	            <div className="stack-list">
+	              <div className="stack-item">
+	                <span>Crude oil</span>
+	                <strong>{dashboard ? formatPercent(dashboard.calculator.eia_reference_crude_share, 1) : "--"}</strong>
+	              </div>
+	              <div className="stack-item">
+	                <span>Refining</span>
+	                <strong>17.5%</strong>
+	              </div>
+	              <div className="stack-item">
+	                <span>Distribution + marketing</span>
+	                <strong>16.6%</strong>
+	              </div>
+	              <div className="stack-item">
+	                <span>Taxes</span>
+	                <strong>16.4%</strong>
+	              </div>
+	            </div>
+	            <p className="metric-note">
+	              {dashboard ? `Current WTI implies ${formatMoney(dashboard.calculator.daily_wti_per_gallon, 3)} per gallon of crude input before refining, distribution, and taxes.` : ""}
+	            </p>
+	          </article>
+	        </section>
 
         <section className="panel methodology-panel">
           <div className="section-head">
