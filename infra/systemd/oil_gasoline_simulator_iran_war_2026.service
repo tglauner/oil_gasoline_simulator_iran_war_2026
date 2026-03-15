@@ -1,0 +1,15 @@
+[Unit]
+Description=Oil Gasoline Simulator Iran War 2026 FastAPI service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/oil_gasoline_simulator_iran_war_2026/backend
+EnvironmentFile=/var/www/oil_gasoline_simulator_iran_war_2026/backend/.env
+ExecStart=/var/www/oil_gasoline_simulator_iran_war_2026/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
