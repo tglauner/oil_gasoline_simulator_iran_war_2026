@@ -80,17 +80,44 @@ function formatTimestamp(value) {
 
 async function fetchJson(path, options) {
   const response = await fetch(`${API_BASE_URL}${path}`, options);
+  const contentType = response.headers.get("content-type") || "";
   let payload = {};
-  try {
-    payload = await response.json();
-  } catch {
-    payload = {};
+  if (contentType.includes("application/json")) {
+    try {
+      payload = await response.json();
+    } catch {
+      if (response.ok) {
+        throw new Error(
+          `Received an invalid JSON response from ${path}. Check the backend server or local API proxy.`,
+        );
+      }
+    }
+  } else {
+    const text = await response.text();
+    if (response.ok) {
+      throw new Error(
+        `Expected JSON from ${path} but received ${contentType || "an unknown content type"}. Check the backend server or local API proxy.`,
+      );
+    }
+    payload = { detail: text };
   }
 
   if (!response.ok) {
     throw new Error(payload.detail || payload.error || `Request failed with ${response.status}`);
   }
   return payload;
+}
+
+
+function getDashboardDefaultTargetWti(payload) {
+  const dailyWti = payload?.current?.daily_wti?.value;
+  const gasPrice = payload?.current?.aaa_regular_gasoline?.value;
+  const weeklyPairs = payload?.history?.weekly_pairs;
+  if (typeof dailyWti !== "number" || typeof gasPrice !== "number" || !Array.isArray(weeklyPairs)) {
+    console.error("Invalid dashboard payload received from API", payload);
+    throw new Error("Dashboard API returned an unexpected payload. Check the backend server or local API proxy.");
+  }
+  return dailyWti * 1.25;
 }
 
 
@@ -285,7 +312,7 @@ export default function App() {
     setStatus("Loading market data and model diagnostics.");
     try {
       const payload = await fetchJson(forceRefresh ? "/api/refresh" : "/api/dashboard");
-      const defaultTargetWti = payload.current.daily_wti.value * 1.25;
+      const defaultTargetWti = getDashboardDefaultTargetWti(payload);
       const nextScenario = {
         targetWti: defaultTargetWti.toFixed(1),
         horizonWeeks: "8",

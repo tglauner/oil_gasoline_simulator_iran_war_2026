@@ -30,7 +30,7 @@ sh scripts/bootstrap_local.sh
 ```bash
 cd /Users/tglauner/Library/CloudStorage/Dropbox/2\ -\ TG\ Investments\ and\ Research/Projects/oil_gasoline_simulator_iran_war_2026/backend
 . .venv/bin/activate
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8003
 ```
 
 ### 3. Start the frontend
@@ -43,7 +43,9 @@ npm run dev
 
 Frontend default URL: `http://127.0.0.1:5173`
 
-Backend default URL: `http://127.0.0.1:8000`
+Backend default URL: `http://127.0.0.1:8003`
+
+During local development, the Vite dev server proxies `/api` and `/health` to the backend on `127.0.0.1:8003`, so `frontend/.env` is usually not needed unless you want a non-default API target.
 
 ## Validation
 
@@ -68,9 +70,10 @@ Production target:
 - `https://oil-gasoline-simulator-iran-war-2026.tglauner.com`
 
 Deployment model:
-- Apache serves `frontend/dist`
+- Existing Apache on the droplet serves `frontend/dist` from `/var/www/html/oil_gasoline_simulator_iran_war_2026/frontend/dist`
 - Apache proxies `/api` and `/health` to the local uvicorn service
-- systemd runs the backend on `127.0.0.1:8000`
+- Apache site files live under `/etc/apache2/sites-available`
+- systemd runs the backend on `127.0.0.1:8003`
 
 Use the Apache + systemd droplet runbook in `docs/RUNBOOK.md` for the exact deployment commands.
 
@@ -86,14 +89,17 @@ Use the Apache + systemd droplet runbook in `docs/RUNBOOK.md` for the exact depl
 ## Debug logging
 
 - Backend runtime logs go to `backend/logs/app.log`
-- The backend truncates that log file on each startup when `TRUNCATE_LOGS_ON_STARTUP=true`
+- Local-safe default behavior truncates that log file on startup when `TRUNCATE_LOGS_ON_STARTUP=true`
+- The supplied production `.env` and `logrotate` setup keep the log growing safely over long uptime without wiping it on every restart
 - Request logs include request IDs, response status, client host, and duration
+- The production systemd unit disables Uvicorn access logs because Apache already records access traffic
 - EIA source diagnostics include fetch timing, source URL, error class, and fallback reason
 - Parse failures log field-level booleans and a compact section snippet so EIA markup changes can be diagnosed quickly
 - The frontend exposes source diagnostics in the warning panel when fallback or hybrid mode is active
 - Set `LOG_LEVEL=DEBUG` in `backend/.env` when you want header-level fetch diagnostics in the terminal and log file
 - `SOURCE_FETCH_TIMEOUT_SECONDS` defaults to `40` to tolerate slower EIA responses; raise it in `backend/.env` if their history pages are especially slow
 - Leave `EXPOSE_INTERNAL_ERROR_DETAILS=false` in production so 500 responses stay sanitized while full details remain in logs
+- Apache access/error logs are separate and are normally already managed by Ubuntu's packaged `logrotate` rules
 
 ## Data sources
 

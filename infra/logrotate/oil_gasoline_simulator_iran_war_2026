@@ -1,0 +1,10 @@
+/var/www/html/oil_gasoline_simulator_iran_war_2026/backend/logs/app.log {
+    weekly
+    rotate 52
+    compress
+    delaycompress
+    dateext
+    missingok
+    notifempty
+    create 0640 www-data www-data
+}

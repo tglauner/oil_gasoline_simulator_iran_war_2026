@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import WatchedFileHandler
 from contextvars import ContextVar
 
 from app.config import Settings
@@ -42,7 +43,7 @@ def configure_logging(settings: Settings) -> logging.Logger:
     settings.log_dir.mkdir(parents=True, exist_ok=True)
 
     console_handler = logging.StreamHandler()
-    file_handler = logging.FileHandler(
+    file_handler = WatchedFileHandler(
         settings.log_file_path,
         mode="w" if settings.truncate_logs_on_startup else "a",
         encoding="utf-8",
@@ -62,7 +63,7 @@ def configure_logging(settings: Settings) -> logging.Logger:
     logger = _bind_handlers(APP_LOGGER_NAME, handlers=shared_handlers, level=level)
     _bind_handlers("uvicorn", handlers=shared_handlers, level=level)
     _bind_handlers("uvicorn.error", handlers=shared_handlers, level=level)
-    _bind_handlers("uvicorn.access", handlers=shared_handlers, level=level)
+    _bind_handlers("uvicorn.access", handlers=[], level=level)
 
     _LOGGING_CONFIGURED = True
     logger.info(
