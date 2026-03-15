@@ -23,7 +23,9 @@ def test_dashboard_and_simulation_endpoints():
     assert "model" in payload
     assert "diagnostics" in payload
     assert "sources" in payload["diagnostics"]
-    assert payload["historical_event"]["date"] == "2026-02-28"
+    assert len(payload["historical_events"]) == 2
+    assert payload["historical_events"][0]["date"] == "2025-01-20"
+    assert payload["historical_events"][1]["date"] == "2026-02-28"
 
     target_wti = payload["history"]["latest_basis"]["crude"] + 12.0
     simulation = client.post(

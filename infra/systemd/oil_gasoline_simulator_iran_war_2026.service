@@ -7,9 +7,18 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/oil_gasoline_simulator_iran_war_2026/backend
 EnvironmentFile=/var/www/oil_gasoline_simulator_iran_war_2026/backend/.env
-ExecStart=/var/www/oil_gasoline_simulator_iran_war_2026/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/var/www/oil_gasoline_simulator_iran_war_2026/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
 Restart=always
 RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/www/oil_gasoline_simulator_iran_war_2026/backend/logs
+UMask=027
+LimitNOFILE=4096
 
 [Install]
 WantedBy=multi-user.target

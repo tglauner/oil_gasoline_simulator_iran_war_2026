@@ -223,19 +223,27 @@ def build_dashboard_payload(force_refresh: bool = False) -> tuple[dict, list[dic
                     2,
                 ),
             },
-        "history": {
-            "weekly_pairs": observations[-104:],
-            "latest_basis": latest_observation,
-        },
-        "historical_event": {
-            "label": "Iran war begins",
-            "date": settings.iran_war_start_date,
-        },
-        "methodology": build_methodology_payload(dataset["mode"], dataset["errors"]),
-        "diagnostics": {
-            "log_file": str(settings.log_file_path) if settings.expose_source_diagnostics else None,
-            "sources": list(dataset.get("diagnostics", {}).values()) if settings.expose_source_diagnostics else [],
-        },
+            "history": {
+                "weekly_pairs": observations[-104:],
+                "latest_basis": latest_observation,
+            },
+            "historical_events": [
+                {
+                    "key": "trump_administration_start",
+                    "label": "Trump administration begins",
+                    "date": settings.trump_administration_start_date,
+                },
+                {
+                    "key": "iran_war_start",
+                    "label": "Iran war begins",
+                    "date": settings.iran_war_start_date,
+                },
+            ],
+            "methodology": build_methodology_payload(dataset["mode"], dataset["errors"]),
+            "diagnostics": {
+                "log_file": str(settings.log_file_path) if settings.expose_source_diagnostics else None,
+                "sources": list(dataset.get("diagnostics", {}).values()) if settings.expose_source_diagnostics else [],
+            },
         }
 
         RUNTIME_CACHE["loaded_at"] = now

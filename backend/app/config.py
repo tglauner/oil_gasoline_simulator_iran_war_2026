@@ -33,6 +33,7 @@ class Settings:
     expose_source_diagnostics: bool
     expose_internal_error_details: bool
     source_fetch_timeout_seconds: float
+    trump_administration_start_date: str
     iran_war_start_date: str
 
 
@@ -57,5 +58,6 @@ settings = Settings(
         False,
     ),
     source_fetch_timeout_seconds=float(os.getenv("SOURCE_FETCH_TIMEOUT_SECONDS", "40")),
+    trump_administration_start_date=_parse_date_env("TRUMP_ADMINISTRATION_START_DATE", "2025-01-20"),
     iran_war_start_date=_parse_date_env("IRAN_WAR_START_DATE", "2026-02-28"),
 )

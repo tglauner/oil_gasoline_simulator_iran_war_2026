@@ -62,10 +62,25 @@ cd backend
 pytest
 ```
 
+## Production
+
+Production target:
+- `https://oil-gasoline-simulator-iran-war-2026.tglauner.com`
+
+Deployment model:
+- Apache serves `frontend/dist`
+- Apache proxies `/api` and `/health` to the local uvicorn service
+- systemd runs the backend on `127.0.0.1:8000`
+
+Use the Apache + systemd droplet runbook in `docs/RUNBOOK.md` for the exact deployment commands.
+
 ## Environment files
 
 - `frontend/.env.example`
 - `backend/.env.example`
+- In production, the frontend can use same-origin API calls with no `VITE_API_BASE_URL` override
+- `frontend/.env.example` is for local development; do not copy it into the droplet build unless you intentionally want a non-default API target
+- `TRUMP_ADMINISTRATION_START_DATE` defaults to `2025-01-20` and controls the vertical marker for the second Trump administration on the 104-week oil and gasoline charts
 - `IRAN_WAR_START_DATE` defaults to `2026-02-28` and controls the vertical event marker on the 104-week oil and gasoline charts
 
 ## Debug logging

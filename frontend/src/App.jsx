@@ -1,7 +1,33 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const PSYCHOLOGICAL_PRICE_THRESHOLDS = [
+  {
+    key: "3.00",
+    priceLabel: "$3.00",
+    threshold: 3.0,
+    reaction: "Noticeable concern, political discussion begins",
+  },
+  {
+    key: "3.50",
+    priceLabel: "$3.50",
+    threshold: 3.5,
+    reaction: "Broad complaints, media coverage increases",
+  },
+  {
+    key: "4.00",
+    priceLabel: "$4.00",
+    threshold: 4.0,
+    reaction: "Major public anger; political pressure on government",
+  },
+  {
+    key: "5.00",
+    priceLabel: "$5.00+",
+    threshold: 5.0,
+    reaction: "Severe backlash; consumer behavior changes and political consequences",
+  },
+];
 
 
 function formatMoney(value, decimals = 2) {
@@ -68,7 +94,7 @@ async function fetchJson(path, options) {
 }
 
 
-function LineChart({ series, height = 250, marker = null }) {
+function LineChart({ series, height = 250, markers = [] }) {
   if (!series.length || !series[0].points.length) {
     return <div className="chart-empty">No chart data available.</div>;
   }
@@ -88,12 +114,26 @@ function LineChart({ series, height = 250, marker = null }) {
   const lastDate = series[0].points[series[0].points.length - 1].x;
   const firstDateMs = new Date(`${firstDate}T00:00:00Z`).getTime();
   const lastDateMs = new Date(`${lastDate}T00:00:00Z`).getTime();
-  const markerDateMs = marker ? new Date(`${marker.date}T00:00:00Z`).getTime() : null;
-  const markerInRange = markerDateMs != null && markerDateMs >= firstDateMs && markerDateMs <= lastDateMs;
-  const markerRatio = markerInRange && lastDateMs > firstDateMs ? (markerDateMs - firstDateMs) / (lastDateMs - firstDateMs) : null;
-  const markerX = markerRatio != null ? padding.left + innerWidth * markerRatio : null;
-  const markerTextAnchor = markerRatio != null && markerRatio > 0.76 ? "end" : "start";
-  const markerLabelX = markerX == null ? null : markerTextAnchor === "start" ? markerX + 6 : markerX - 6;
+  const visibleMarkers = markers
+    .map((marker, index) => {
+      const markerDateMs = new Date(`${marker.date}T00:00:00Z`).getTime();
+      if (Number.isNaN(markerDateMs) || markerDateMs < firstDateMs || markerDateMs > lastDateMs || lastDateMs <= firstDateMs) {
+        return null;
+      }
+
+      const markerRatio = (markerDateMs - firstDateMs) / (lastDateMs - firstDateMs);
+      const markerX = padding.left + innerWidth * markerRatio;
+      const markerTextAnchor = markerRatio > 0.76 ? "end" : "start";
+      const markerLabelX = markerTextAnchor === "start" ? markerX + 6 : markerX - 6;
+      return {
+        ...marker,
+        x: markerX,
+        labelX: markerLabelX,
+        textAnchor: markerTextAnchor,
+        labelY: padding.top + 12 + index * 14,
+      };
+    })
+    .filter(Boolean);
 
   const grid = Array.from({ length: 5 }, (_, index) => {
     const y = padding.top + (innerHeight / 4) * index;
@@ -120,12 +160,12 @@ function LineChart({ series, height = 250, marker = null }) {
               {item.label}
             </span>
           ))}
-          {markerInRange ? (
-            <span className="legend-item">
-              <span className="legend-swatch marker-swatch" />
+          {visibleMarkers.map((marker) => (
+            <span className="legend-item" key={marker.key || `${marker.date}-${marker.label}`}>
+              <span className="legend-swatch marker-swatch" style={{ "--marker-color": marker.color }} />
               {marker.label}
             </span>
-          ) : null}
+          ))}
         </div>
         <div>
           {formatDate(firstDate)} to {formatDate(lastDate)}
@@ -137,29 +177,29 @@ function LineChart({ series, height = 250, marker = null }) {
       </div>
       <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Line chart">
         {grid}
-        {markerInRange ? (
-          <g>
+        {visibleMarkers.map((marker) => (
+          <g key={marker.key || `${marker.date}-${marker.label}`}>
             <line
-              x1={markerX}
+              x1={marker.x}
               y1={padding.top}
-              x2={markerX}
+              x2={marker.x}
               y2={height - padding.bottom}
-              stroke="rgba(157, 77, 47, 0.9)"
+              stroke={marker.color}
               strokeWidth="2"
               strokeDasharray="6 6"
             />
             <text
-              x={markerLabelX}
-              y={padding.top + 12}
-              textAnchor={markerTextAnchor}
-              fill="#9d4d2f"
+              x={marker.labelX}
+              y={marker.labelY}
+              textAnchor={marker.textAnchor}
+              fill={marker.color}
               fontSize="11"
               fontWeight="700"
             >
               {marker.label}
             </text>
           </g>
-        ) : null}
+        ))}
         {series.map((line) => {
           const points = line.points
             .map((point, index) => {
@@ -219,6 +259,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState(null);
   const [simulation, setSimulation] = useState(null);
   const [status, setStatus] = useState("Loading market data and model diagnostics.");
+  const [dashboardLoadState, setDashboardLoadState] = useState("loading");
   const initialLoadStarted = useRef(false);
   const [calculatorInputs, setCalculatorInputs] = useState({
     miles: "300",
@@ -240,6 +281,7 @@ export default function App() {
   }, []);
 
   async function loadDashboard(forceRefresh) {
+    setDashboardLoadState("loading");
     setStatus("Loading market data and model diagnostics.");
     try {
       const payload = await fetchJson(forceRefresh ? "/api/refresh" : "/api/dashboard");
@@ -261,8 +303,10 @@ export default function App() {
       });
 
       await loadSimulation(nextScenario);
+      setDashboardLoadState("success");
       setStatus(payload.mode === "live" ? "Live EIA data loaded successfully." : "Running with live fallback or mixed data.");
     } catch (error) {
+      setDashboardLoadState("error");
       setStatus(`Unable to load dashboard data: ${error.message}`);
     }
   }
@@ -313,40 +357,60 @@ export default function App() {
   const fillUpCost = tankGallons * gasPrice;
   const crudeCostPerGallon = wtiPrice / 42.0;
   const crudeShare = gasPrice > 0 ? crudeCostPerGallon / gasPrice : 0;
+  const activeThreshold = [...PSYCHOLOGICAL_PRICE_THRESHOLDS]
+    .reverse()
+    .find((item) => gasPrice >= item.threshold) || null;
   const targetWtiValue = Number(scenarioInputs.targetWti || 0);
   const oilTargetDelta = wtiPrice > 0 ? targetWtiValue / wtiPrice - 1 : 0;
   const modeledGasDelta = simulation?.current_basis?.weekly_gas
     ? simulation.summary.final_price / simulation.current_basis.weekly_gas - 1
     : 0;
-  const eventMarker = dashboard?.historical_event
-    ? {
-        date: dashboard.historical_event.date,
-        label: `${dashboard.historical_event.label} ${formatDate(dashboard.historical_event.date)}`,
-      }
-    : null;
+  const eventColors = {
+    trump_administration_start: "#294e8f",
+    iran_war_start: "#9d4d2f",
+  };
+  const eventMarkers = dashboard?.historical_events?.map((item) => ({
+    ...item,
+    color: eventColors[item.key] || "#7f5f46",
+    label: `${item.label} ${formatDate(item.date)}`,
+  })) || [];
+  const dashboardLoadLabel = dashboardLoadState === "loading"
+    ? "Fetching market data..."
+    : dashboardLoadState === "success"
+      ? "Market data ready"
+      : "Market data failed";
 
   return (
     <div className="page-shell">
       <header className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Crude To Pump Lab</p>
-          <h1>Track live oil and gasoline prices, then stress-test the pass-through.</h1>
+          <p className="eyebrow">Iran War Price Tracker</p>
+          <h1>Track and stress-test oil and gasoline prices due to Iran war</h1>
           <p className="hero-text">
-            This React frontend pairs with a FastAPI backend and models how a crude-price shock can reach the U.S.
-            gasoline market over the following weeks.
+            Watch how war-driven oil shocks push gasoline prices higher and how that pressure lands on households,
+            politics, and public anger at the pump.
           </p>
         </div>
         <div className="hero-panel">
           <div className="status-row">
             <span className="badge">{dashboard ? dashboard.mode.toUpperCase() : "LOADING"}</span>
-            <button className="ghost-button" type="button" onClick={() => void loadDashboard(true)}>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => void loadDashboard(true)}
+              disabled={dashboardLoadState === "loading"}
+            >
               Refresh data
             </button>
           </div>
-          <p className="status-text">{status}</p>
+          <div className={`status-indicator ${dashboardLoadState}`} aria-live="polite">
+            <span className="status-indicator-dot" aria-hidden="true" />
+            <span>{dashboardLoadLabel}</span>
+          </div>
+          <p className="status-text" aria-live="polite">{status}</p>
           {dashboard?.errors?.length ? (
             <div className="warning-box">
-              <p className="warning-title">Live source diagnostics</p>
+              <p className="warning-title">Live data diagnostics</p>
               <ul className="warning-list">
                 {dashboard.errors.map((item) => (
                   <li key={item}>{item}</li>
@@ -354,7 +418,7 @@ export default function App() {
               </ul>
               {dashboard.diagnostics?.sources?.length ? (
                 <details className="debug-details">
-                  <summary>Open source diagnostics</summary>
+                  <summary>Open data diagnostics</summary>
                   <ul className="debug-list">
                     {dashboard.diagnostics.sources.map((item) => (
                       <li key={item.name}>
@@ -373,6 +437,34 @@ export default function App() {
               ) : null}
             </div>
           ) : null}
+          <div className="threshold-card">
+            <p className="threshold-title">Psychological gasoline thresholds</p>
+            <p className="threshold-note">
+              Public frustration with pump prices tends to rise sharply around these levels.
+            </p>
+            {dashboard ? (
+              <p className="threshold-current">
+                Current AAA regular: <strong>{formatMoney(gasPrice, 3)}</strong>
+                {activeThreshold ? `, above ${activeThreshold.priceLabel}` : ", below $3.00"}
+              </p>
+            ) : null}
+            <div className="threshold-grid" role="table" aria-label="Psychological gasoline thresholds">
+              <div className="threshold-head" role="row">
+                <span role="columnheader">Price</span>
+                <span role="columnheader">Typical reaction</span>
+              </div>
+              {PSYCHOLOGICAL_PRICE_THRESHOLDS.map((item) => (
+                <div
+                  className={`threshold-row ${gasPrice >= item.threshold ? "active" : ""}`}
+                  role="row"
+                  key={item.key}
+                >
+                  <strong role="cell">{item.priceLabel}</strong>
+                  <span role="cell">{item.reaction}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -417,11 +509,11 @@ export default function App() {
               </div>
 	              <div className="chart-frame">
 	                {dashboard ? (
-	                  <LineChart
-	                    marker={eventMarker}
-	                    series={[
-	                      {
-	                        label: "WTI weekly",
+                  <LineChart
+                    markers={eventMarkers}
+                    series={[
+                      {
+                        label: "WTI weekly",
                         color: "#9d4d2f",
                         fill: "rgba(157, 77, 47, 0.10)",
                         points: dashboard.history.weekly_pairs.map((item) => ({ x: item.date, y: item.crude })),
@@ -438,11 +530,11 @@ export default function App() {
               </div>
 	              <div className="chart-frame">
 	                {dashboard ? (
-	                  <LineChart
-	                    marker={eventMarker}
-	                    series={[
-	                      {
-	                        label: "Gasoline weekly",
+                  <LineChart
+                    markers={eventMarkers}
+                    series={[
+                      {
+                        label: "Gasoline weekly",
                         color: "#1d6f72",
                         fill: "rgba(29, 111, 114, 0.12)",
                         points: dashboard.history.weekly_pairs.map((item) => ({ x: item.date, y: item.gas })),
