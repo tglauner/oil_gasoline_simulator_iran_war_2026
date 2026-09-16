@@ -15,6 +15,10 @@ Build small, consistent web apps with:
 
 Codex: follow these rules before making changes. Ask if a requirement conflicts.
 
+## Current Deployment Status
+
+**On hold as of 2026-09-17.** The DigitalOcean systemd service and public Apache routes are disabled; retain the source and deployment artifacts for a future restart.
+
 ## Cost Discipline (non-negotiable)
 - Default to the cheapest viable approach.
 - Prefer single-droplet architecture; no Kubernetes, no extra managed services unless explicitly requested.
@@ -44,7 +48,7 @@ Backend:
 - pip install -r requirements.txt
 - uvicorn app.main:app --reload
 
-## Production (DigitalOcean)
+## Production (DigitalOcean, when resumed)
 - Apache terminates TLS and reverse-proxies to Uvicorn.
 - Serve only on port 443 in Apache vhost (no port 80 vhost).
 - Use systemd for the backend service.

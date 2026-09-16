@@ -1,5 +1,7 @@
 # oil_gasoline_simulator_iran_war_2026
 
+> **Status (2026-09-17): On hold.** The DigitalOcean production service and public routes have been disabled. The code remains available for a future restart.
+
 React/Vite frontend plus FastAPI backend for:
 
 - current WTI crude pricing
@@ -64,7 +66,9 @@ cd backend
 pytest
 ```
 
-## Production
+## Production (on hold)
+
+The DigitalOcean service and public Apache routes are disabled. The following deployment model is retained for a future restart.
 
 Production target:
 - `https://oil-gasoline-simulator-iran-war-2026.tglauner.com`
